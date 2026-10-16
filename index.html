@@ -1299,16 +1299,15 @@ function toggleResidentialFields() {
   }
 }
 
-// ===== FORM SUBMISSION → BACKEND + WhatsApp =====
+// ===== FORM SUBMISSION → WhatsApp (instant) + silent database save =====
 const API_URL = "https://dynamic-cleaners.onrender.com/api/quotes";
 
-async function submitQuoteForm() {
+function submitQuoteForm() {
   const fname   = document.getElementById('form-fname').value.trim();
   const lname   = document.getElementById('form-lname').value.trim();
   const phone   = document.getElementById('form-phone').value.trim();
   const service = document.getElementById('form-service').value;
   const message = document.getElementById('form-message').value.trim();
-  const btn     = document.querySelector('.form-submit');
 
   if (!fname || !phone || !service) {
     alert('Please fill in your name, phone number, and service type.');
@@ -1320,51 +1319,43 @@ async function submitQuoteForm() {
   const rooms         = showResidential ? document.getElementById('form-rooms').value : '';
   const cleaningType  = showResidential ? document.getElementById('form-cleaning-type').value : '';
 
-  btn.disabled = true;
-  btn.textContent = 'Sending... (may take up to a minute)';
+  // Build WhatsApp message
+  let extraLines = '';
+  if (residenceType) extraLines += `\n*Residence Type:* ${residenceType}`;
+  if (rooms)         extraLines += `\n*Number of Rooms:* ${rooms}`;
+  if (cleaningType)  extraLines += `\n*Cleaning Type:* ${cleaningType}`;
 
-  try {
-    const res = await fetch(API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        first_name: fname,
-        last_name: lname,
-        phone: phone,
-        service: service,
-        residence_type: residenceType,
-        rooms: rooms,
-        cleaning_type: cleaningType,
-        message: message
-      })
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || "Request failed.");
+  const text = `*New Quote Request – Dynamic Cleaning Services*\n\n*Name:* ${fname} ${lname}\n*Phone:* ${phone}\n*Service:* ${service}${extraLines}\n*Message:* ${message || '(none)'}`;
+  const waUrl = `https://wa.me/601166887720?text=${encodeURIComponent(text)}`;
 
-    alert("Thank you! Your quote request has been received. We'll contact you soon.");
+  // Save to database silently (user never sees this).
+  // keepalive lets the request finish even after the page switches to WhatsApp.
+  fetch(API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    keepalive: true,
+    body: JSON.stringify({
+      first_name: fname,
+      last_name: lname,
+      phone: phone,
+      service: service,
+      residence_type: residenceType,
+      rooms: rooms,
+      cleaning_type: cleaningType,
+      message: message
+    })
+  }).catch(() => {});
 
-    // Optional: still open WhatsApp as before
-    let extraLines = '';
-    if (residenceType) extraLines += `\n*Residence Type:* ${residenceType}`;
-    if (rooms)         extraLines += `\n*Number of Rooms:* ${rooms}`;
-    if (cleaningType)  extraLines += `\n*Cleaning Type:* ${cleaningType}`;
-    const text = `*New Quote Request – Dynamic Cleaning Services*\n\n*Name:* ${fname} ${lname}\n*Phone:* ${phone}\n*Service:* ${service}${extraLines}\n*Message:* ${message || '(none)'}`;
-    window.open(`https://wa.me/601166887720?text=${encodeURIComponent(text)}`, '_blank');
+  // Open WhatsApp immediately
+  window.open(waUrl, '_blank');
 
-    document.getElementById('form-fname').value = '';
-    document.getElementById('form-lname').value = '';
-    document.getElementById('form-phone').value = '';
-    document.getElementById('form-service').value = '';
-    document.getElementById('form-message').value = '';
-    toggleResidentialFields();
-  } catch (err) {
-    alert(err.message === "Failed to fetch"
-      ? "Could not reach the server. Please try again."
-      : err.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Send via WhatsApp →';
-  }
+  // Clear the form
+  document.getElementById('form-fname').value = '';
+  document.getElementById('form-lname').value = '';
+  document.getElementById('form-phone').value = '';
+  document.getElementById('form-service').value = '';
+  document.getElementById('form-message').value = '';
+  toggleResidentialFields();
 }
      
 </script>
